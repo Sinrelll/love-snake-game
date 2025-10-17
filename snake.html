@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Love Snake Game</title>
+<style>
+  html, body { margin:0; padding:0; overflow:hidden; touch-action:none; }
+  canvas { display:block; }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<script>
+(function(){
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+
+function resize(){ canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+window.addEventListener('resize', resize);
+resize();
+
+const grid = 30;
+const message = "Babyyy i lovee you so much darling koo, its me Sinrel. Youre annoying drama queen, thank you for accepting me always and i will always choose you forever even if you dont love me anymore, i hope you choose me always too.❤️";
+let letterIndex = 0;
+
+let snake = [{x: grid*5, y: grid*10, letter:""}];
+let dx = grid, dy = 0;
+let speed = 2.5; // slower start
+let lastTime = 0;
+let accumulator = 0;
+let apple = spawnApple();
+
+function spawnApple(){
+  while(letterIndex < message.length && message[letterIndex].trim()==="") letterIndex++;
+  if(letterIndex >= message.length) return null;
+  const cols = Math.floor(canvas.width/grid);
+  const rows = Math.floor(canvas.height/grid);
+  let x,y,tries=0;
+  do {
+    x = Math.floor(Math.random()*cols)*grid;
+    y = Math.floor(Math.random()*rows)*grid;
+    tries++;
+    if(tries>200) break;
+  } while(snake.some(s=>s.x===x && s.y===y));
+  return {x,y,letter:message[letterIndex]};
+}
+
+// Swipe controls
+let startX=0, startY=0;
+canvas.addEventListener('touchstart', e=>{ const t=e.touches[0]; startX=t.clientX; startY=t.clientY;},{passive:true});
+canvas.addEventListener('touchend', e=>{
+  const t = e.changedTouches[0];
+  const dxSwipe = t.clientX-startX;
+  const dySwipe = t.clientY-startY;
+  if(Math.abs(dxSwipe)>Math.abs(dySwipe)){
+    if(dxSwipe>0 && dx!==-grid){ dx=grid; dy=0; }
+    else if(dxSwipe<0 && dx!==grid){ dx=-grid; dy=0; }
+  } else {
+    if(dySwipe>0 && dy!==-grid){ dy=grid; dx=0; }
+    else if(dySwipe<0 && dy!==grid){ dy=-grid; dx=0; }
+  }
+},{passive:true});
+
+// Draw snake segment
+function drawCircle(x,y,color,letter){
+  const cx=x+grid/2, cy=y+grid/2;
+  ctx.beginPath();
+  ctx.arc(cx,cy,grid/2-2,0,Math.PI*2);
+  ctx.fillStyle=color;
+  ctx.shadowColor=color;
+  ctx.shadowBlur=4;
+  ctx.fill();
+  if(letter){
+    ctx.fillStyle="#fff";
+    ctx.font=`bold ${Math.max(12, Math.floor(grid*0.45))}px Arial`;
+    ctx.textAlign="center";
+    ctx.textBaseline="middle";
+    ctx.fillText(letter,cx,cy);
+  }
+}
+
+// Draw apple
+function drawApple(x,y,letter){
+  const cx=x+grid/2, cy=y+grid/2;
+  ctx.save();
+  ctx.translate(cx,cy);
+  ctx.beginPath();
+  ctx.moveTo(0,0);
+  ctx.bezierCurveTo(-10,-10,-15,5,0,15);
+  ctx.bezierCurveTo(15,5,10,-10,0,0);
+  ctx.fillStyle='red';
+  ctx.shadowColor='darkred';
+  ctx.shadowBlur=4;
+  ctx.fill();
+  ctx.restore();
+  ctx.fillStyle="#fff";
+  ctx.font=`bold ${Math.max(12, Math.floor(grid*0.5))}px Arial`;
+  ctx.textAlign="center";
+  ctx.textBaseline="middle";
+  ctx.fillText(letter,cx,cy);
+}
+
+// Draw top letters in 4 lines safely
+function drawTopRow(){
+  const paddingTop = 10;
+  const paddingSides = 10;
+  const lines = 4;
+  const maxWidth = canvas.width - 2*paddingSides;
+  const maxHeight = canvas.height/4; // max height per line
+  const charsPerLine = Math.ceil(message.length / lines);
+
+  // Compute font size to fit width and height
+  let fontSize = Math.floor(maxWidth / charsPerLine);
+  fontSize = Math.min(fontSize, maxHeight - 5);
+  ctx.font = `bold ${fontSize}px Arial`;
+  ctx.textBaseline="top";
+  ctx.textAlign="left";
+
+  for(let l=0;l<lines;l++){
+    for(let i=0;i<charsPerLine;i++){
+      const idx = l*charsPerLine + i;
+      if(idx >= letterIndex) break;
+      const x = paddingSides + i*(maxWidth/charsPerLine);
+      const y = paddingTop + l*(fontSize + 5);
+      ctx.fillStyle="#000";
+      ctx.fillText(message[idx], x, y);
+    }
+  }
+}
+
+function resetGame(){
+  snake=[{x:grid*5,y:grid*10,letter:""}];
+  dx=grid; dy=0; speed=2.5;
+  letterIndex=0;
+  apple = spawnApple();
+}
+
+function step(){
+  const headX = snake[0].x + dx;
+  const headY = snake[0].y + dy;
+  const newX = headX<0 ? canvas.width-grid : headX>=canvas.width ? 0 : headX;
+  const newY = headY<0 ? canvas.height-grid : headY>=canvas.height ? 0 : headY;
+
+  if(snake.some((s,i)=>i>0 && s.x===newX && s.y===newY)){
+    alert("Baliw kaba 💔"); resetGame(); return;
+  }
+
+  snake.unshift({x:newX, y:newY, letter:""});
+
+  if(apple && newX===apple.x && newY===apple.y){
+    const tailIdx = snake.length-1;
+    snake[tailIdx].letter = apple.letter;
+    letterIndex++;
+    apple = spawnApple();
+    if(!apple) setTimeout(()=>alert("💖 Message Complete! 💖"),300);
+    speed *= 1.03; // slower growth
+  } else snake.pop();
+}
+
+function loop(time){
+  if(!lastTime) lastTime=time;
+  const delta=(time-lastTime)/1000;
+  lastTime=time;
+  accumulator+=delta*speed;
+  while(accumulator>=1){ step(); accumulator-=1; }
+
+  // Background
+  const grad = ctx.createLinearGradient(0,0,0,canvas.height);
+  grad.addColorStop(0,'#ffdde1');
+  grad.addColorStop(1,'#ee9ca7');
+  ctx.fillStyle=grad;
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+
+  drawTopRow();
+  if(apple) drawApple(apple.x,apple.y,apple.letter);
+  snake.forEach(seg=>drawCircle(seg.x,seg.y,'darkgreen',seg.letter||""));
+
+  requestAnimationFrame(loop);
+}
+
+resetGame();
+requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
